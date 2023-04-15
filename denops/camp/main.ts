@@ -8,14 +8,18 @@ import {
 
 export function main(denops: Denops): Promise<void> {
     denops.dispatcher = {
+        async campOpen(): Promise<void> {
+            await competeOpen(await currentFullPath(denops));
+        },
         async campTest(): Promise<void> {
-            const [_, output] = await competeTest(await fn.expand(denops, "%:p") as string);
+            const [_, output] = await competeTest(await currentFullPath(denops));
             await denops.call("camp#write", "test", output);
         },
         async campSubmit(force: unknown): Promise<void> {
             assertNumber(force);
+            const source = await currentFullPath(denops);
             if(!force) {
-                const [success, output] = await competeTest(await fn.expand(denops, "%:p") as string);
+                const [success, output] = await competeTest(source);
                 if(!success) {
                     await denops.call("camp#write", "test", output);
                     return;
@@ -25,13 +29,25 @@ export function main(denops: Denops): Promise<void> {
                     return;
                 }
             }
-            const uri = await competeSubmit(await fn.expand(denops, "%:p") as string);
+            const uri = await competeSubmit(source);
             try {
                 denops.call("openbrowser#open", uri);
             } catch(_) { /*do noting*/ }
         },
     };
     return Promise.resolve();
+}
+
+async function currentFullPath(denops: Denops): Promise<string> {
+    return await fn.expand(denops, "%:p") as string;
+}
+
+async function competeOpen(source: string): Promise<void> {
+    const { dir, name } = parse(source);
+    await $`cargo compete open --bin ${name}`
+        .cwd(dir)
+        .noThrow()
+        .quiet();
 }
 
 async function competeTest(source: string): Promise<[boolean, string[]]> {
