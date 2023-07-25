@@ -2,13 +2,9 @@ import { $, assert, Denops, fn, is, systemopen } from "./deps.ts";
 
 export function main(denops: Denops): Promise<void> {
   denops.dispatcher = {
-    async campNew(name: unknown): Promise<void> {
+    async campNew(name: unknown): Promise<unknown> {
       assert(name, is.String);
-      await competeNew(name);
-      for await (const src of $.fs.expandGlob(`${name}/src/bin/*.rs`)) {
-        const path = src.path;
-        await fn.bufadd(denops, path);
-      }
+      return await competeNew(name);
     },
     async campOpen(): Promise<void> {
       await competeOpen(await currentFullPath(denops));
@@ -44,15 +40,19 @@ async function currentFullPath(denops: Denops): Promise<string> {
   return await fn.expand(denops, "%:p") as string;
 }
 
-async function competeNew(name: string): Promise<void> {
-  await $`cargo compete new ${name}`.noThrow().quiet();
+export async function competeNew(name: string): Promise<string[]> {
+  await $`cargo compete new ${name}`.quiet();
+  const ret = [];
+  for await (const src of $.fs.expandGlob(`${name}/src/bin/*.rs`)) {
+    ret.push(src.path);
+  }
+  return ret;
 }
 
 async function competeOpen(source: string): Promise<void> {
   const { dir, name } = $.path.parse(source);
   await $`cargo compete open --bin ${name}`
     .cwd(dir)
-    .noThrow()
     .quiet();
 }
 

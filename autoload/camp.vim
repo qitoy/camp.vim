@@ -24,3 +24,13 @@ function camp#write(name, text) abort
   call camp#open(a:name)
   call camp#append(a:name, a:text)
 endfunction
+
+function camp#notify(func, ...) abort
+  call denops#plugin#wait('camp')
+  call denops#notify('camp', a:func, a:000)
+endfunction
+
+function camp#request(func, ...) abort
+  call denops#plugin#wait('camp')
+  return denops#request('camp', a:func, a:000)
+endfunction
