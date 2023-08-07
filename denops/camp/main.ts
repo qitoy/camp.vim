@@ -1,18 +1,25 @@
-import { $, assert, Denops, fn, is, systemopen } from "./deps.ts";
+import { $, assert, Denops, ensure, fn, is, systemopen } from "./deps.ts";
 
-export function main(denops: Denops): Promise<void> {
+export function main(denops: Denops): void {
   denops.dispatcher = {
     async campNew(name: unknown): Promise<unknown> {
       assert(name, is.String);
       return await competeNew(name);
     },
+
     async campOpen(): Promise<void> {
-      await competeOpen(await currentFullPath(denops));
+      try {
+        await competeOpen(await currentFullPath(denops));
+      } catch {
+        console.error("invalid problem page");
+      }
     },
+
     async campTest(): Promise<void> {
       const [_, output] = await competeTest(await currentFullPath(denops));
       await denops.call("camp#write", "test", output);
     },
+
     async campSubmit(force: unknown): Promise<void> {
       assert(force, is.Number);
       const source = await currentFullPath(denops);
@@ -33,7 +40,6 @@ export function main(denops: Denops): Promise<void> {
       await systemopen(uri);
     },
   };
-  return Promise.resolve();
 }
 
 async function currentFullPath(denops: Denops): Promise<string> {
@@ -42,11 +48,19 @@ async function currentFullPath(denops: Denops): Promise<string> {
 
 export async function competeNew(name: string): Promise<string[]> {
   await $`cargo compete new ${name}`.quiet();
-  const ret = [];
-  for await (const src of $.fs.expandGlob(`${name}/src/bin/*.rs`)) {
-    ret.push(src.path);
-  }
-  return ret;
+  const isMetadata = is.ObjectOf({
+    packages: is.ArrayOf(is.ObjectOf({
+      targets: is.ArrayOf(is.ObjectOf({
+        src_path: is.String,
+      })),
+    })),
+  });
+  const json = ensure(
+    await $`cargo metadata --manifest-path ${name}/Cargo.toml --no-deps --format-version 1`
+      .json(),
+    isMetadata,
+  );
+  return json.packages[0].targets.map((v) => v.src_path);
 }
 
 async function competeOpen(source: string): Promise<void> {
