@@ -1,12 +1,7 @@
-import { $, assert, Denops, ensure, fn, is, systemopen } from "./deps.ts";
+import { $, assert, Denops, fn, is, systemopen } from "./deps.ts";
 
 export function main(denops: Denops): void {
   denops.dispatcher = {
-    async campNew(name: unknown): Promise<unknown> {
-      assert(name, is.String);
-      return await competeNew(name);
-    },
-
     async campOpen(): Promise<void> {
       try {
         await competeOpen(await currentFullPath(denops));
@@ -46,32 +41,20 @@ async function currentFullPath(denops: Denops): Promise<string> {
   return await fn.expand(denops, "%:p") as string;
 }
 
-export async function competeNew(name: string): Promise<string[]> {
-  await $`cargo compete new ${name}`.quiet();
-  const isMetadata = is.ObjectOf({
-    packages: is.ArrayOf(is.ObjectOf({
-      targets: is.ArrayOf(is.ObjectOf({
-        src_path: is.String,
-      })),
-    })),
-  });
-  const json = ensure(
-    await $`cargo metadata --manifest-path ${name}/Cargo.toml --no-deps --format-version 1`
-      .json(),
-    isMetadata,
-  );
-  return json.packages[0].targets.map((v) => v.src_path);
-}
-
 async function competeOpen(source: string): Promise<void> {
-  const { dir, name } = $.path.parse(source);
+  const path = $.path(source);
+  const dir = path.dirname();
+  // a.rs -> a
+  const name = path.basename().slice(0, -3);
   await $`cargo compete open --bin ${name}`
     .cwd(dir)
     .quiet();
 }
 
 async function competeTest(source: string): Promise<[boolean, string[]]> {
-  const { dir, name } = $.path.parse(source);
+  const path = $.path(source);
+  const dir = path.dirname();
+  const name = path.basename().slice(0, -3);
   const { code, combined } = await $`cargo compete test ${name}`
     .captureCombined()
     .cwd(dir)
@@ -81,7 +64,9 @@ async function competeTest(source: string): Promise<[boolean, string[]]> {
 }
 
 async function competeSubmit(source: string): Promise<string> {
-  const { dir, name } = $.path.parse(source);
+  const path = $.path(source);
+  const dir = path.dirname();
+  const name = path.basename().slice(0, -3);
   const lines = await $`cargo compete submit ${name} --no-test --no-watch`
     .captureCombined()
     .cwd(dir)
